@@ -1,4 +1,9 @@
 import { createServiceClient } from "@/lib/supabase/admin"
+import {
+  effectiveAnalysesUsed,
+  fetchProfileUsage,
+  planFromProfile,
+} from "@/lib/profile-usage"
 
 export type Plan = "free" | "solo" | "pro"
 
@@ -38,19 +43,23 @@ export async function checkAnalysisLimit(userId: string) {
   const supabase = createServiceClient()
   const month = currentUsageMonth()
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("plan, analyses_used, usage_month")
-    .eq("id", userId)
-    .maybeSingle()
+  const { data: profile, hasUsageMonth, error } = await fetchProfileUsage(supabase, userId)
 
-  if (error) throw error
+  if (error) {
+    console.error("checkAnalysisLimit", error)
+    return {
+      allowed: true,
+      used: 0,
+      limit: getPlanLimits("free").analyses,
+      plan: "free" as Plan,
+    }
+  }
 
-  const plan = (profile?.plan ?? "free") as Plan
+  const plan = planFromProfile(profile)
   const limits = getPlanLimits(plan)
+  let used = effectiveAnalysesUsed(profile, hasUsageMonth)
 
-  let used = profile?.analyses_used ?? 0
-  if (!profile?.usage_month || profile.usage_month !== month) {
+  if (hasUsageMonth && profile && (!profile.usage_month || profile.usage_month !== month)) {
     used = 0
     await supabase
       .from("profiles")
@@ -70,25 +79,23 @@ export async function incrementAnalysisUsage(userId: string) {
   const supabase = createServiceClient()
   const month = currentUsageMonth()
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("analyses_used, usage_month")
-    .eq("id", userId)
-    .maybeSingle()
-
-  let base = profile?.analyses_used ?? 0
-  if (!profile?.usage_month || profile.usage_month !== month) {
-    base = 0
+  const { data: profile, hasUsageMonth, error } = await fetchProfileUsage(supabase, userId)
+  if (error) {
+    console.error("incrementAnalysisUsage", error)
+    return
   }
 
-  await supabase
-    .from("profiles")
-    .update({
-      analyses_used: base + 1,
-      usage_month: month,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId)
+  const base = effectiveAnalysesUsed(profile, hasUsageMonth)
+
+  const payload: Record<string, unknown> = {
+    analyses_used: base + 1,
+    updated_at: new Date().toISOString(),
+  }
+  if (hasUsageMonth) {
+    payload.usage_month = month
+  }
+
+  await supabase.from("profiles").update(payload).eq("id", userId)
 }
 
 export async function checkChatLimit(contractId: string, userId: string) {
@@ -111,7 +118,10 @@ export async function checkChatLimit(contractId: string, userId: string) {
     .eq("contract_id", contractId)
     .eq("role", "user")
 
-  if (error) throw error
+  if (error) {
+    console.error("checkChatLimit", error)
+    return { allowed: true, used: 0, limit: limits.chat }
+  }
 
   const used = count ?? 0
   return {
@@ -137,7 +147,10 @@ export async function checkStorageLimit(userId: string) {
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
 
-  if (error) throw error
+  if (error) {
+    console.error("checkStorageLimit", error)
+    return { allowed: true, used: 0, limit: limits.storage }
+  }
 
   const used = count ?? 0
   return {

@@ -1,15 +1,8 @@
 import Link from "next/link"
-import { Menu } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { UserMenu } from "@/components/user-menu"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { cn } from "@/lib/utils"
+import { MobileNav } from "@/components/mobile-nav"
 
 export async function Navbar() {
   const supabase = await createClient()
@@ -34,43 +27,14 @@ export async function Navbar() {
             Analyze
           </Link>
         </nav>
-        <div className="flex flex-1 justify-end md:hidden">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon" }),
-                "text-white hover:bg-white/10",
-              )}
-              aria-label="Open menu"
-            >
-              <Menu className="size-5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem className="p-0">
-                <Link className="block w-full px-2 py-1.5" href="/">
-                  Home
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="p-0">
-                <Link className="block w-full px-2 py-1.5" href="/pricing">
-                  Pricing
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="p-0">
-                <Link className="block w-full px-2 py-1.5" href="/analyze">
-                  Analyze
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div className="flex items-center gap-2">
+        <MobileNav email={user?.email} />
+        <div className="hidden items-center gap-2 md:flex">
           {user ? (
             <>
               <Button
                 asChild
                 variant="secondary"
-                className="hidden bg-white text-[#1A3C5E] hover:bg-white/90 sm:inline-flex"
+                className="bg-white text-[#1A3C5E] hover:bg-white/90"
               >
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
@@ -85,10 +49,7 @@ export async function Navbar() {
               >
                 <Link href="/login">Login</Link>
               </Button>
-              <Button
-                asChild
-                className="bg-[#E8401C] text-white hover:bg-[#c73516]"
-              >
+              <Button asChild className="bg-[#E8401C] text-white hover:bg-[#c73516]">
                 <Link href="/signup">Sign up</Link>
               </Button>
             </>
