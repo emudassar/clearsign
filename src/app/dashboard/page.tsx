@@ -1,10 +1,11 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { checkAnalysisLimit } from "@/lib/limits"
+import { getDashboardUsage } from "@/lib/dashboard-usage"
+import { splitStoredAnalysis } from "@/lib/analysis-display"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import type { ContractAnalysis } from "@/types/analysis"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -13,17 +14,21 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return null
+    redirect("/login?next=/dashboard")
   }
 
-  const [{ data: contracts }, usage] = await Promise.all([
+  const [{ data: contracts, error: contractsError }, usage] = await Promise.all([
     supabase
       .from("contracts")
       .select("id, title, analysis, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
-    checkAnalysisLimit(user.id),
+    getDashboardUsage(supabase, user.id),
   ])
+
+  if (contractsError) {
+    console.error("dashboard contracts", contractsError)
+  }
 
   const rows = contracts ?? []
 
@@ -38,7 +43,6 @@ export default async function DashboardPage() {
           <Link href="/analyze">New analysis</Link>
         </Button>
       </div>
-
       <Card className="mt-8 border-muted">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Usage this month</CardTitle>
@@ -57,6 +61,12 @@ export default async function DashboardPage() {
         </CardHeader>
       </Card>
 
+      {contractsError ? (
+        <p className="mt-4 text-sm text-amber-800">
+          Could not load saved contracts. Try again or run a new analysis.
+        </p>
+      ) : null}
+
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         {rows.length === 0 ? (
           <Card className="border-dashed sm:col-span-2">
@@ -70,7 +80,7 @@ export default async function DashboardPage() {
           </Card>
         ) : (
           rows.map((c) => {
-            const a = c.analysis as unknown as ContractAnalysis
+            const { analysis: a } = splitStoredAnalysis(c.analysis)
             const risk = a.risk_score ?? 0
             const riskVariant =
               risk >= 8 ? "destructive" : risk >= 5 ? "secondary" : "default"
