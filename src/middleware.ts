@@ -3,6 +3,14 @@ import { updateSession } from "@/lib/supabase/middleware"
 
 export async function middleware(request: NextRequest) {
   try {
+    const url = request.nextUrl
+    /* Supabase sometimes sends users to Site URL root with ?code=…; send them to the handler. */
+    if (url.pathname === "/" && url.searchParams.has("code")) {
+      const target = url.clone()
+      target.pathname = "/auth/callback"
+      return NextResponse.redirect(target)
+    }
+
     const { response, supabase } = await updateSession(request)
 
     const {

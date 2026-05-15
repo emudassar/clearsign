@@ -20,11 +20,12 @@ export default function SignupPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const origin = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
+    // Always use the site the user is actually on. NEXT_PUBLIC_APP_URL is often set to
+    // localhost in Vercel by mistake and would override this, breaking confirmation emails.
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${origin}/auth/callback` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
     setLoading(false)
     if (error) {
