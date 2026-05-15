@@ -1,0 +1,33 @@
+You are building ClearSign — an AI contract clause explainer SaaS.
+
+STACK:
+- Next.js 14 App Router, TypeScript, Tailwind CSS, shadcn/ui
+- Supabase (auth + postgres + storage)
+- Google Gemini API via @google/generative-ai package
+- Lemon Squeezy for payments
+- pdf-parse for PDF text extraction, mammoth for DOCX extraction
+- Puppeteer for PDF export of analysis
+- react-dropzone for file uploads
+- Vercel for hosting
+
+DESIGN:
+- Primary color: #1A3C5E (navy)
+- Alert/danger color: #E8401C (orange-red)
+- Font: Inter
+- Mobile-first, clean, minimal UI
+- Risk score 0–10 where 10 = most risky (red), 5–7 = medium (amber), 0–4 = low (green)
+
+RULES:
+- Always use App Router, never pages router
+- Always use TypeScript
+- Use shadcn/ui components wherever possible
+- All Supabase server calls use createServerClient from @supabase/ssr
+- All Supabase client calls use createBrowserClient from @supabase/ssr
+- Never hardcode API keys — always use process.env
+- Always handle loading, error, and empty states in UI
+- Free plan limits: 5 analyses/lifetime, 3 chat questions/analysis, 3 contracts stored
+- Solo plan: 25 analyses/month, unlimited chat, 50 contracts, PDF export enabled
+- Pro plan: 80 analyses/month, unlimited chat, unlimited contracts, PDF export enabled
+- Legal disclaimer must appear on every analysis result: "ClearSign provides AI-generated analysis for informational purposes only. This is NOT legal advice. Always consult a qualified attorney before signing any contract."
+- File uploads accept: PDF, DOCX, TXT only. Max 20MB.
+- No OCR, no image upload support
