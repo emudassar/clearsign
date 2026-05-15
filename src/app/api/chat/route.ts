@@ -84,12 +84,17 @@ export async function POST(request: Request) {
     const msg = geminiErrorUserMessage(e)
     const lower = msg.toLowerCase()
     const status =
-      lower.includes("429") ||
-      lower.includes("resource_exhausted") ||
-      lower.includes("quota exceeded") ||
-      lower.includes("quota")
-        ? 429
-        : 500
+      lower.includes("503") ||
+      lower.includes("high demand") ||
+      lower.includes("unavailable") ||
+      lower.includes("overloaded")
+        ? 503
+        : lower.includes("429") ||
+            lower.includes("resource_exhausted") ||
+            lower.includes("quota exceeded") ||
+            lower.includes("quota")
+          ? 429
+          : 500
     return NextResponse.json({ error: msg }, { status })
   }
 }

@@ -4,19 +4,23 @@ import type { ContractAnalysis } from "@/types/analysis"
 
 const apiKey = process.env.GOOGLE_AI_API_KEY
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /**
  * Tried in order until one succeeds. Override with GEMINI_MODEL (single model, no fallback).
- * Free-tier quotas differ per model; if one hits 429, the next may still work.
+ * Put lighter / older models first — gemini-2.5-flash often returns 503 under load.
  */
 function modelCandidates(): string[] {
   const explicit = process.env.GEMINI_MODEL?.trim()
   if (explicit) return [explicit]
 
   return [
-    "gemini-2.5-flash",
     "gemini-2.0-flash-lite",
     "gemini-2.0-flash",
     "gemini-flash-latest",
+    "gemini-2.5-flash",
   ]
 }
 
@@ -27,14 +31,24 @@ function getGenAI() {
   return new GoogleGenerativeAI(apiKey)
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 function shouldTryNextModel(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = errorMessage(err).toLowerCase()
   return (
     msg.includes("429") ||
+    msg.includes("503") ||
+    msg.includes("502") ||
+    msg.includes("500") ||
     msg.includes("404") ||
-    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.includes("resource_exhausted") ||
+    msg.includes("high demand") ||
+    msg.includes("unavailable") ||
+    msg.includes("overloaded") ||
     msg.includes("quota") ||
-    msg.includes("Quota exceeded")
+    msg.includes("quota exceeded")
   )
 }
 
@@ -73,7 +87,10 @@ ${trimmed}
 """`
 
   const models = modelCandidates()
-  for (const modelId of models) {
+  let lastError: unknown = null
+
+  for (let i = 0; i < models.length; i++) {
+    const modelId = models[i]!
     try {
       const model = genAI.getGenerativeModel({
         model: modelId,
@@ -85,13 +102,20 @@ ${trimmed}
       const raw = result.response.text()
       return JSON.parse(raw) as ContractAnalysis
     } catch (e) {
-      if (shouldTryNextModel(e) && models.indexOf(modelId) < models.length - 1) {
+      lastError = e
+      const hasNext = i < models.length - 1
+      if (shouldTryNextModel(e) && hasNext) {
+        const msg = errorMessage(e).toLowerCase()
+        if (msg.includes("503") || msg.includes("high demand")) {
+          await sleep(600)
+        }
         continue
       }
       throw e
     }
   }
-  throw new Error("No Gemini model succeeded")
+
+  throw lastError ?? new Error("No Gemini model succeeded")
 }
 
 export async function chatWithContract(
@@ -123,25 +147,46 @@ user: ${newMessage}
 assistant:`
 
   const models = modelCandidates()
-  for (const modelId of models) {
+  let lastError: unknown = null
+
+  for (let i = 0; i < models.length; i++) {
+    const modelId = models[i]!
     try {
       const model = genAI.getGenerativeModel({ model: modelId })
       const result = await model.generateContent(prompt)
       return result.response.text()
     } catch (e) {
-      if (shouldTryNextModel(e) && models.indexOf(modelId) < models.length - 1) {
+      lastError = e
+      const hasNext = i < models.length - 1
+      if (shouldTryNextModel(e) && hasNext) {
+        const msg = errorMessage(e).toLowerCase()
+        if (msg.includes("503") || msg.includes("high demand")) {
+          await sleep(600)
+        }
         continue
       }
       throw e
     }
   }
-  throw new Error("No Gemini model succeeded")
+
+  throw lastError ?? new Error("No Gemini model succeeded")
 }
 
-/** User-facing hint when Google returns quota / billing errors */
+/** User-facing hint when Google returns quota / capacity errors */
 export function geminiErrorUserMessage(err: unknown): string {
   const text = formatApiErrorField(err, "").trim()
   const probe = text.toLowerCase()
+  if (
+    probe.includes("503") ||
+    probe.includes("high demand") ||
+    probe.includes("unavailable") ||
+    probe.includes("overloaded")
+  ) {
+    return (
+      "The AI service is busy right now (high demand). Wait a minute and try again — " +
+      "we automatically try other Gemini models when one is overloaded."
+    )
+  }
   if (
     probe.includes("429") ||
     probe.includes("resource_exhausted") ||

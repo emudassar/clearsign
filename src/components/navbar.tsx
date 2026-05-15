@@ -27,35 +27,44 @@ export async function Navbar() {
             Analyze
           </Link>
         </nav>
-        <MobileNav email={user?.email} />
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="flex items-center gap-2">
+          <MobileNav email={user?.email} />
           {user ? (
-            <>
-              <Button
-                asChild
-                variant="secondary"
-                className="bg-white text-[#1A3C5E] hover:bg-white/90"
-              >
-                <Link href="/dashboard">Dashboard</Link>
-              </Button>
+            <div className="md:hidden">
               <UserMenu email={user.email ?? ""} />
-            </>
-          ) : (
-            <>
-              <Button
-                asChild
-                variant="ghost"
-                className="text-white hover:bg-white/10 hover:text-white"
-              >
-                <Link href="/login">Login</Link>
-              </Button>
-              <Button asChild className="bg-[#E8401C] text-white hover:bg-[#c73516]">
-                <Link href="/signup">Sign up</Link>
-              </Button>
-            </>
-          )}
+            </div>
+          ) : null}
+          <div className="hidden items-center gap-2 md:flex">
+            {user ? (
+              <>
+                <Button
+                  asChild
+                  variant="secondary"
+                  className="bg-white text-[#1A3C5E] hover:bg-white/90"
+                >
+                  <Link href="/dashboard">Dashboard</Link>
+                </Button>
+                <UserMenu email={user.email ?? ""} />
+              </>
+            ) : (
+              <>
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="text-white hover:bg-white/10 hover:text-white"
+                >
+                  <Link href="/login">Login</Link>
+                </Button>
+                <Button asChild className="bg-[#E8401C] text-white hover:bg-[#c73516]">
+                  <Link href="/signup">Sign up</Link>
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </header>
   )
 }
+
+
