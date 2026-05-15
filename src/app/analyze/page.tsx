@@ -88,10 +88,20 @@ export default function AnalyzePage() {
       fd.append("party", partyLabel)
 
       const res = await fetch("/api/analyze", { method: "POST", body: fd })
-      const data = (await res.json()) as {
+      const rawBody = await res.text()
+      let data: {
         contractId?: string
         analysis?: ContractAnalysis
         error?: unknown
+      }
+      try {
+        data = rawBody ? (JSON.parse(rawBody) as typeof data) : {}
+      } catch {
+        toast.error("Server error (not JSON)", {
+          description:
+            "Vercel: set NEXT_PUBLIC_SUPABASE_URL (full name), GOOGLE_AI_API_KEY, Supabase keys — redeploy. See function logs for /api/analyze.",
+        })
+        return
       }
 
       if (!res.ok) {
@@ -108,7 +118,7 @@ export default function AnalyzePage() {
       setPhaseIndex(PHASES.length - 1)
       router.push(`/analysis/${data.contractId}`)
     } catch {
-      toast.error("Network error")
+      toast.error("Could not reach the server. Check your connection or try again in a moment.")
     } finally {
       timers.forEach((t) => window.clearInterval(t))
       setBusy(false)
