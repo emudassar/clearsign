@@ -11,6 +11,8 @@ import {
 import type { ContractAnalysis } from "@/types/analysis"
 
 export const runtime = "nodejs"
+/** Vercel / long Gemini runs — avoid gateway cutting the response with HTML 504/500. */
+export const maxDuration = 60
 
 const MAX_BYTES = 20 * 1024 * 1024
 

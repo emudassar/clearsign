@@ -5,6 +5,7 @@ import { chatWithContract, geminiErrorUserMessage } from "@/lib/gemini"
 import { checkChatLimit } from "@/lib/limits"
 
 export const runtime = "nodejs"
+export const maxDuration = 60
 
 export async function POST(request: Request) {
   try {
