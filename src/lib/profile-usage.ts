@@ -12,24 +12,27 @@ function currentUsageMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
-/** Works even when usage_month column is missing (older Supabase schemas). */
+function isMissingColumnError(error: { message?: string }): boolean {
+  const msg = error.message ?? ""
+  return msg.includes("does not exist") || msg.includes("PGRST204") || msg.includes("column")
+}
+
+/** Works when profiles table is missing optional columns (partial migrations). */
 export async function fetchProfileUsage(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<{ data: ProfileUsageRow | null; hasUsageMonth: boolean; error: Error | null }> {
-  const withMonth = await supabase
+  const full = await supabase
     .from("profiles")
     .select("plan, analyses_used, usage_month")
     .eq("id", userId)
     .maybeSingle()
 
-  if (!withMonth.error) {
-    return { data: withMonth.data, hasUsageMonth: true, error: null }
+  if (!full.error) {
+    return { data: full.data as ProfileUsageRow, hasUsageMonth: true, error: null }
   }
-
-  const msg = withMonth.error.message ?? ""
-  if (!msg.includes("usage_month")) {
-    return { data: null, hasUsageMonth: false, error: withMonth.error }
+  if (!isMissingColumnError(full.error)) {
+    return { data: null, hasUsageMonth: false, error: full.error }
   }
 
   const basic = await supabase
@@ -38,11 +41,27 @@ export async function fetchProfileUsage(
     .eq("id", userId)
     .maybeSingle()
 
-  if (basic.error) {
+  if (!basic.error) {
+    return { data: basic.data as ProfileUsageRow, hasUsageMonth: false, error: null }
+  }
+  if (!isMissingColumnError(basic.error)) {
     return { data: null, hasUsageMonth: false, error: basic.error }
   }
 
-  return { data: basic.data, hasUsageMonth: false, error: null }
+  const planOnly = await supabase
+    .from("profiles")
+    .select("plan")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (!planOnly.error) {
+    return { data: planOnly.data as ProfileUsageRow, hasUsageMonth: false, error: null }
+  }
+  if (!isMissingColumnError(planOnly.error)) {
+    return { data: null, hasUsageMonth: false, error: planOnly.error }
+  }
+
+  return { data: null, hasUsageMonth: false, error: null }
 }
 
 export function effectiveAnalysesUsed(

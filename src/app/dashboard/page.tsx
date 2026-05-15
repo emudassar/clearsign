@@ -2,10 +2,14 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getDashboardUsage } from "@/lib/dashboard-usage"
-import { splitStoredAnalysis } from "@/lib/analysis-display"
-import { Button } from "@/components/ui/button"
+import type { Plan } from "@/lib/limits"
+import { contractCardSummary } from "@/lib/analysis-display"
+import { buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
+
+export const dynamic = "force-dynamic"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -17,20 +21,40 @@ export default async function DashboardPage() {
     redirect("/login?next=/dashboard")
   }
 
-  const [{ data: contracts, error: contractsError }, usage] = await Promise.all([
-    supabase
-      .from("contracts")
-      .select("id, title, analysis, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
-    getDashboardUsage(supabase, user.id),
-  ])
-
-  if (contractsError) {
-    console.error("dashboard contracts", contractsError)
+  let usage: { used: number; limit: number; plan: Plan } = {
+    used: 0,
+    limit: 3,
+    plan: "free",
   }
+  let rows: {
+    id: string
+    title: string | null
+    analysis: unknown
+    created_at: string | null
+  }[] = []
+  let contractsError: string | null = null
 
-  const rows = contracts ?? []
+  try {
+    const [contractsResult, usageResult] = await Promise.all([
+      supabase
+        .from("contracts")
+        .select("id, title, analysis, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      getDashboardUsage(supabase, user.id),
+    ])
+
+    usage = usageResult
+    if (contractsResult.error) {
+      contractsError = contractsResult.error.message
+      console.error("dashboard contracts", contractsResult.error)
+    } else {
+      rows = contractsResult.data ?? []
+    }
+  } catch (e) {
+    console.error("dashboard load", e)
+    contractsError = "Could not load dashboard data."
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -39,10 +63,17 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight text-[#1A3C5E]">Dashboard</h1>
           <p className="mt-1 text-muted-foreground">Your saved contract analyses.</p>
         </div>
-        <Button asChild className="bg-[#E8401C] text-white hover:bg-[#c73516]">
-          <Link href="/analyze">New analysis</Link>
-        </Button>
+        <Link
+          href="/analyze"
+          className={cn(
+            buttonVariants(),
+            "bg-[#E8401C] text-white hover:bg-[#c73516]",
+          )}
+        >
+          New analysis
+        </Link>
       </div>
+
       <Card className="mt-8 border-muted">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Usage this month</CardTitle>
@@ -62,9 +93,7 @@ export default async function DashboardPage() {
       </Card>
 
       {contractsError ? (
-        <p className="mt-4 text-sm text-amber-800">
-          Could not load saved contracts. Try again or run a new analysis.
-        </p>
+        <p className="mt-4 text-sm text-amber-800">{contractsError}</p>
       ) : null}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -80,10 +109,12 @@ export default async function DashboardPage() {
           </Card>
         ) : (
           rows.map((c) => {
-            const { analysis: a } = splitStoredAnalysis(c.analysis)
-            const risk = a.risk_score ?? 0
+            const { contract_type, risk_score: risk } = contractCardSummary(c.analysis)
             const riskVariant =
               risk >= 8 ? "destructive" : risk >= 5 ? "secondary" : "default"
+            const createdLabel = c.created_at
+              ? new Date(c.created_at).toLocaleString()
+              : ""
             return (
               <Link key={c.id} href={`/analysis/${c.id}`} className="block">
                 <Card className="h-full border-muted transition-shadow hover:shadow-md">
@@ -92,11 +123,11 @@ export default async function DashboardPage() {
                       <CardTitle className="line-clamp-2 text-lg">
                         {c.title ?? "Untitled contract"}
                       </CardTitle>
-                      <Badge variant="outline">{a.contract_type ?? "Contract"}</Badge>
+                      <Badge variant="outline">{contract_type}</Badge>
                     </div>
-                    <CardDescription>
-                      {new Date(c.created_at ?? "").toLocaleString()}
-                    </CardDescription>
+                    {createdLabel ? (
+                      <CardDescription>{createdLabel}</CardDescription>
+                    ) : null}
                   </CardHeader>
                   <CardContent className="flex flex-wrap gap-2">
                     <Badge variant={riskVariant}>Risk {risk}/10</Badge>
@@ -110,3 +141,4 @@ export default async function DashboardPage() {
     </div>
   )
 }
+
